@@ -42,66 +42,78 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/<start><br/>"
-        f"/api/v1.0/<start>/<end>"
+        f"/api/v1.0/YYYY-MM-DD     #start date<br/>"
+        f"/api/v1.0/YYYY-MM-DD/YYYY-MM-DD    #start date/end date"
     )
 
 @app.route("/api/v1.0/precipitation")
 def prcp():
-    return( 'prcp' )
+    session = Session(engine)
+    results = session.query(Measurment.date, Measurment.prcp).all()
+
+    session.close
+
+    prcp_dict = {}
+    for date, prcp in results:        
+        prcp_dict[f'{date}'] = prcp
+
+    return jsonify(prcp_dict)
+
 
 @app.route("/api/v1.0/stations")
 def stat():
-    return( 'stat' )
+    session = Session(engine)
+    results = session.query(Station.station).all()
+
+    session.close
+
+    station_list = list(np.ravel(results))
+
+    return jsonify(station_list)
+
 
 @app.route("/api/v1.0/tobs")
 def temp():
-    return( 'temp' )
+    session = Session(engine)
+    m_act_station = session.query(Measurment.station, func.count(Measurment.station). \
+                    label('count')).group_by(Measurment.station).order_by(desc('count')).first()
+
+    last_act_date = session.query(func.max(Measurment.date)).first()
+    one_yr_date = dt.strptime(last_act_date[0], '%Y-%m-%d').date() - relativedelta(months=12)
+
+    results = session.query(Measurment.date, Measurment.tobs).filter(Measurment.station == f'{m_act_station[0]}').filter(Measurment.date >= f'{one_yr_date}').all()
+
+    session.close
+
+    temp_list = []
+    for date,temp in results:
+        temp_list.append(temp)
+    
+    return jsonify(temp_list)
+
 
 @app.route("/api/v1.0/<start>")
 def startDate(start):
-    return( 'MN' )
+    session = Session(engine)
+    tmin = session.query(func.min(Measurment.tobs)).filter(Measurment.date >= f'{start}').first()
+    tmax = session.query(func.max(Measurment.tobs)).filter(Measurment.date >= f'{start}').first()
+    tavg = session.query(func.avg(Measurment.tobs)).filter(Measurment.date >= f'{start}').first()
+
+    session = Session(engine)
+
+    return jsonify([f'minTemp = {tmin[0]}, maxTemp = {tmax[0]}, avgTemp = {round(tavg[0],2)}'])
 
 
 @app.route("/api/v1.0/<start>/<end>")
 def startEndDate(start,end):
-    return( 'k' )
+    session = Session(engine)
+    tmin = session.query(func.min(Measurment.tobs)).filter(Measurment.date >= f'{start}').filter(Measurment.date <= f'{end}').first()
+    tmax = session.query(func.max(Measurment.tobs)).filter(Measurment.date >= f'{start}').filter(Measurment.date <= f'{end}').first()
+    tavg = session.query(func.avg(Measurment.tobs)).filter(Measurment.date >= f'{start}').filter(Measurment.date <= f'{end}').first()
 
+    session = Session(engine)
 
-# @app.route("/")
-# def welcome():
-#     return (
-#         f"Welcome to the Justice League API!<br/>"
-#         f"Available Routes:<br/>"
-#         f"/api/v1.0/justice-league<br/>"
-#         f"/api/v1.0/justice-league/Arthur%20Curry<br/>"
-#         f"/api/v1.0/justice-league/Bruce%20Wayne<br/>"
-#         f"/api/v1.0/justice-league/Victor%20Stone<br/>"
-#         f"/api/v1.0/justice-league/Barry%20Allen<br/>"
-#         f"/api/v1.0/justice-league/Hal%20Jordan<br/>"
-#         f"/api/v1.0/justice-league/Clark%20Kent/Kal-El<br/>"
-#         f"/api/v1.0/justice-league/Princess%20Diana"
-#     )
-
-
-# @app.route("/api/v1.0/<start>/<end>")
-# def justice_league_character(start,end):
-#     """Fetch the Justice League character whose real_name matches
-#        the path variable supplied by the user, or a 404 if not."""
-
-#     # canonicalized = real_name.replace(" ", "").lower()
-#     # for character in justice_league_members:
-#     #     search_term = character["real_name"].replace(" ", "").lower()
-
-#     #     if search_term == canonicalized:
-    # return jsonify('haracter')
-
-
-
-
-
-
-
+    return jsonify([f'minTemp = {tmin[0]}, maxTemp = {tmax[0]}, avgTemp = {round(tavg[0],2)}'])
 
 
 if __name__ == "__main__":
